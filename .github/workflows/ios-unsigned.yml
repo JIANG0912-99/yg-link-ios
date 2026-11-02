@@ -22,7 +22,6 @@ on:
 
 env:
   SB_REPO: https://github.com/SagerNet/sing-box.git
-  SB_REF: testing
   APP_REPO: https://github.com/SagerNet/sing-box-for-apple.git
 
 concurrency:
@@ -55,39 +54,42 @@ jobs:
           go-version: "1.24"
           cache: false
 
-      - name: 克隆上游（内核 + Apple 客户端）
+      - name: 克隆上游（目录名必须和上游脚本约定一致）
         run: |
           set -e
           git clone --depth 1 --branch "${{ github.event.inputs.sb_ref || 'testing' }}" "$SB_REPO" sing-box
           git clone --depth 1 --branch "${{ github.event.inputs.app_ref || 'dev' }}" \
-            --recurse-submodules --shallow-submodules "$APP_REPO" app
+            --recurse-submodules --shallow-submodules "$APP_REPO" sing-box-for-apple
           echo "内核提交: $(git -C sing-box rev-parse --short HEAD)"
-          echo "客户端提交: $(git -C app rev-parse --short HEAD)"
+          echo "客户端提交: $(git -C sing-box-for-apple rev-parse --short HEAD)"
 
       - name: 构建 Libbox.xcframework
         run: |
           set -e
           cd sing-box
           go run ./cmd/internal/build_libbox -target apple 2>&1 | tail -40
-          XCF="$(find . -maxdepth 4 -name 'Libbox.xcframework' -type d | head -1)"
-          echo "产物: $XCF"
-          test -n "$XCF"
-          rm -rf ../app/Libbox.xcframework
-          cp -R "$XCF" ../app/Libbox.xcframework
-          du -sh ../app/Libbox.xcframework
+          cd ..
+          if [ ! -d sing-box-for-apple/Libbox.xcframework ]; then
+            echo "上游未自动拷贝，手动补齐"
+            XCF="$(find sing-box -maxdepth 4 -name 'Libbox.xcframework' -type d | head -1)"
+            test -n "$XCF"
+            cp -R "$XCF" sing-box-for-apple/Libbox.xcframework
+          fi
+          du -sh sing-box-for-apple/Libbox.xcframework
+          ls -la sing-box-for-apple/Libbox.xcframework
 
       - name: 替换品牌
         env:
           APP_ID: ${{ github.event.inputs.app_id || 'com.yglink.app' }}
           APP_NAME: ${{ github.event.inputs.app_name || 'YG Link' }}
-        run: bash scripts/rebrand.sh app "$APP_ID" "$APP_NAME"
+        run: bash scripts/rebrand.sh sing-box-for-apple "$APP_ID" "$APP_NAME"
 
       - name: 编译（不签名）
         env:
           APP_ID: ${{ github.event.inputs.app_id || 'com.yglink.app' }}
         run: |
           set -o pipefail
-          cd app
+          cd sing-box-for-apple
           xcodebuild archive \
             -project sing-box.xcodeproj \
             -scheme SFI \
@@ -108,7 +110,7 @@ jobs:
       - name: 打包成 IPA
         run: |
           set -e
-          APP="$(find app/build/SFI.xcarchive/Products/Applications -maxdepth 1 -name '*.app' | head -1)"
+          APP="$(find sing-box-for-apple/build/SFI.xcarchive/Products/Applications -maxdepth 1 -name '*.app' | head -1)"
           echo "产物: $APP"
           rm -rf out && mkdir -p out/Payload
           cp -R "$APP" out/Payload/
@@ -117,7 +119,7 @@ jobs:
           ls -lh YGLink-unsigned.ipa
           echo "--- 包内结构 ---"
           unzip -l YGLink-unsigned.ipa | head -25
-          echo "--- 扩展是否存在 ---"
+          echo "--- 扩展检查 ---"
           unzip -l YGLink-unsigned.ipa | grep -E "appex|PlugIns" | head -10 || echo "没有找到 appex！"
 
       - name: 上传 IPA
@@ -134,4 +136,3 @@ jobs:
           name: build-logs
           path: xcodebuild.log
           if-no-files-found: ignore
-
