@@ -54,6 +54,18 @@ jobs:
           go-version: "1.24"
           cache: false
 
+      - name: 安装 gomobile / gobind（上游 FindMobile 只认 GOPATH/bin/gobind）
+        run: |
+          set -e
+          go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.12
+          go install github.com/sagernet/gomobile/cmd/gobind@v0.1.12
+          GB="$(go env GOPATH)/bin"
+          echo "$GB" >> "$GITHUB_PATH"
+          export PATH="$GB:$PATH"
+          ls -la "$GB"
+          gobind -version || true
+          gomobile version || true
+
       - name: 克隆上游（目录名必须和上游脚本约定一致）
         run: |
           set -e
