@@ -1,0 +1,23 @@
+{
+  "outbounds": [
+    {
+      "type": "socks",
+      "tag": "yg-node",
+      "server": "192.140.176.22",
+      "server_port": 3716,
+      "version": "5",
+      "username": "xjy2003",
+      "password": "xjy2003"
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "final": "yg-node",
+    "rules": [
+      { "ip_is_private": true, "outbound": "direct" }
+    ]
+  }
+}
