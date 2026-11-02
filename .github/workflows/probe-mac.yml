@@ -1,0 +1,8 @@
+name: probe-mac
+on:
+  workflow_dispatch:
+jobs:
+  m13: {runs-on: macos-13, steps: [{run: sw_vers}]}
+  m14: {runs-on: macos-14, steps: [{run: sw_vers}]}
+  m15: {runs-on: macos-15, steps: [{run: sw_vers}]}
+  mlast: {runs-on: macos-latest, steps: [{run: sw_vers}]}
