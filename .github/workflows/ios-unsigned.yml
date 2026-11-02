@@ -1,4 +1,4 @@
-﻿name: Build unsigned IPA
+name: Build unsigned IPA
 
 on:
   workflow_dispatch:
@@ -19,13 +19,15 @@ on:
         description: "上游 sing-box 内核分支/标签"
         default: "testing"
         required: true
-  push:
-    branches: [main]
 
 env:
   SB_REPO: https://github.com/SagerNet/sing-box.git
   SB_REF: testing
   APP_REPO: https://github.com/SagerNet/sing-box-for-apple.git
+
+concurrency:
+  group: ios-build
+  cancel-in-progress: true
 
 jobs:
   build:
