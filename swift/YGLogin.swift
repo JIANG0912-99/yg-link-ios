@@ -299,145 +299,172 @@ struct YGLaunchView: View {
 struct YGLoginView: View {
     @StateObject private var vm = YGLoginViewModel()
     @State private var proxyEnabled = true
-    @FocusState private var focus: Field?
-
-    enum Field { case user, pass }
+    @FocusState private var focus: Int?
 
     private let bg = Color(red: 0.04, green: 0.05, blue: 0.07)
     private let card = Color(red: 0.08, green: 0.10, blue: 0.13)
     private let line = Color(red: 0.14, green: 0.18, blue: 0.22)
     private let blue = Color(red: 0.18, green: 0.44, blue: 0.92)
+    private let label = Color(red: 0.55, green: 0.65, blue: 0.72)
+    private let red = Color(red: 0.95, green: 0.42, blue: 0.42)
 
     var body: some View {
         ZStack {
             bg.ignoresSafeArea()
 
-            ScrollView {
-                VStack(spacing: 0) {
-                    // 品牌
-                    VStack(spacing: 6) {
-                        Text("YG LINK")
-                            .font(.system(size: 30, weight: .bold, design: .rounded))
+            VStack(spacing: 0) {
+                // 品牌
+                VStack(spacing: 6) {
+                    Text("YG LINK")
+                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .kerning(2)
+                    Text("账号验证")
+                        .font(.system(size: 13))
+                        .foregroundColor(.gray)
+                }
+                .padding(.top, 60)
+                .padding(.bottom, 30)
+
+                accountCard
+
+                // 错误提示
+                if let err = vm.errorText {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "exclamationmark.circle.fill")
+                        Text(err).fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                    .font(.system(size: 13))
+                    .foregroundColor(red)
+                    .padding(.horizontal, 4)
+                    .padding(.top, 10)
+                }
+
+                // 验证按钮
+                Button {
+                    focus = nil
+                    vm.submit()
+                } label: {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(vm.loading ? blue.opacity(0.6) : blue)
+                        if vm.loading {
+                            ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        } else {
+                            Text("点 击 验 证")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .frame(height: 52)
+                }
+                .buttonStyle(.plain)
+                .disabled(vm.loading)
+                .padding(.top, 18)
+
+                // 防封端口
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("防封端口")
+                            .font(.system(size: 16))
                             .foregroundColor(.white)
-                            .kerning(2)
-                        Text("账号验证")
-                            .font(.system(size: 13))
+                        Text("\(YGConfig.proxyHost) : \(YGConfig.proxyPort)")
+                            .font(.system(size: 12))
                             .foregroundColor(.gray)
                     }
-                    .padding(.top, 70)
-                    .padding(.bottom, 34)
-
-                    // 账号 / 密码
-                    VStack(spacing: 0) {
-                        fieldRow(title: "账 号") {
-                            TextField("", text: $vm.username)
-                                .keyboardType(.asciiCapable)
-                                .autocapitalization(.none)
-                                .disableAutocorrection(true)
-                                .focused($focus, equals: .user)
-                                .foregroundColor(.white)
-                        }
-                        Rectangle().fill(line).frame(height: 1).padding(.horizontal, 16)
-                        fieldRow(title: "密 码") {
-                            SecureField("", text: $vm.password)
-                                .focused($focus, equals: .pass)
-                                .foregroundColor(.white)
-                        }
-                    }
-                    .background(card)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(line, lineWidth: 1)
-                    )
-                    .padding(.horizontal, 22)
-
-                    // 错误提示
-                    if let err = vm.errorText {
-                        HStack(spacing: 6) {
-                            Image(systemName: "exclamationmark.circle.fill")
-                            Text(err)
-                        }
-                        .font(.system(size: 13))
-                        .foregroundColor(Color(red: 0.95, green: 0.42, blue: 0.42))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 28)
-                        .padding(.top, 10)
-                    }
-
-                    // 验证按钮
-                    Button {
-                        focus = nil
-                        vm.submit()
-                    } label: {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(vm.loading ? blue.opacity(0.6) : blue)
-                            if vm.loading {
-                                ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            } else {
-                                Text("点 击 验 证")
-                                    .font(.system(size: 17, weight: .semibold))
-                                    .foregroundColor(.white)
-                            }
-                        }
-                        .frame(height: 52)
-                    }
-                    .disabled(vm.loading)
-                    .padding(.horizontal, 22)
-                    .padding(.top, 18)
-
-                    // 防封端口开关
-                    HStack {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("防封端口")
-                                .font(.system(size: 16))
-                                .foregroundColor(.white)
-                            Text("\(YGConfig.proxyHost) : \(YGConfig.proxyPort)")
-                                .font(.system(size: 12))
-                                .foregroundColor(.gray)
-                        }
-                        Spacer()
-                        Toggle("", isOn: $proxyEnabled)
-                            .labelsHidden()
-                            .tint(blue)
-                    }
-                    .padding(.horizontal, 26)
-                    .padding(.top, 26)
-
-                    Rectangle().fill(line).frame(height: 1)
-                        .padding(.horizontal, 22)
-                        .padding(.top, 18)
-
-                    HStack(spacing: 7) {
-                        Circle()
-                            .fill(Color(red: 0.22, green: 0.75, blue: 0.47))
-                            .frame(width: 8, height: 8)
-                        Text("账号有效期由服务端判定，验证通过即可连接")
-                            .font(.system(size: 12))
-                            .foregroundColor(Color(red: 0.45, green: 0.56, blue: 0.64))
-                        Spacer()
-                    }
-                    .padding(.horizontal, 26)
-                    .padding(.top, 16)
-                    .padding(.bottom, 40)
+                    Spacer()
+                    Toggle("", isOn: $proxyEnabled)
+                        .labelsHidden()
+                        .tint(blue)
                 }
+                .padding(.top, 26)
+
+                Rectangle().fill(line).frame(height: 1).padding(.top, 18)
+
+                HStack(spacing: 7) {
+                    Circle()
+                        .fill(Color(red: 0.22, green: 0.75, blue: 0.47))
+                        .frame(width: 8, height: 8)
+                    Text("账号有效期由服务端判定，验证通过即可连接")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(red: 0.45, green: 0.56, blue: 0.64))
+                    Spacer()
+                }
+                .padding(.top, 16)
+
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, 22)
         }
     }
 
-    @ViewBuilder
-    private func fieldRow<C: View>(title: String, @ViewBuilder content: () -> C) -> some View {
-        HStack(spacing: 14) {
-            Text(title)
-                .font(.system(size: 15))
-                .foregroundColor(Color(red: 0.5, green: 0.6, blue: 0.68))
-                .frame(width: 44, alignment: .leading)
-            content()
-                .font(.system(size: 16))
-            Spacer()
+    // MARK: 账号密码卡片
+
+    private var accountCard: some View {
+        VStack(spacing: 0) {
+            // 账号
+            HStack(spacing: 14) {
+                Text("账 号")
+                    .font(.system(size: 15))
+                    .foregroundColor(label)
+                    .frame(width: 46, alignment: .leading)
+
+                TextField("输入账号", text: $vm.username)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 16))
+                    .foregroundColor(.white)
+                    .tint(blue)
+                    .keyboardType(.asciiCapable)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
+                    .submitLabel(.next)
+                    .focused($focus, equals: 0)
+                    .onSubmit { focus = 1 }
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 58)
+            .contentShape(Rectangle())
+            .onTapGesture { focus = 0 }
+
+            Rectangle()
+                .fill(line)
+                .frame(height: 1)
+                .padding(.horizontal, 16)
+                .allowsHitTesting(false)
+
+            // 密码
+            HStack(spacing: 14) {
+                Text("密 码")
+                    .font(.system(size: 15))
+                    .foregroundColor(label)
+                    .frame(width: 46, alignment: .leading)
+
+                SecureField("输入密码", text: $vm.password)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 16))
+                    .foregroundColor(.white)
+                    .tint(blue)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
+                    .submitLabel(.go)
+                    .focused($focus, equals: 1)
+                    .onSubmit {
+                        focus = nil
+                        vm.submit()
+                    }
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 58)
+            .contentShape(Rectangle())
+            .onTapGesture { focus = 1 }
         }
-        .padding(.horizontal, 16)
-        .frame(height: 56)
+        .background(card)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(line, lineWidth: 1)
+                .allowsHitTesting(false)      // 关键：描边不参与点击
+        )
     }
 }
