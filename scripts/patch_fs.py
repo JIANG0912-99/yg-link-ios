@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+"""
+FilePath 补丁：App Group 容器拿不到时退回 App 自己的目录。
+
+背景：
+  FilePath.sharedDirectory = defaultSharedDirectory!    // 强制解包
+  当签名商的描述文件里没有 group.com.yglink.app 时，
+  containerURL(forSecurityApplicationGroupIdentifier:) 返回 nil，
+  这行直接触发 fatalError（EXC_BREAKPOINT / SIGTRAP），App 启动即崩。
+
+  扩展实际是通过 providerConfiguration 的 configContent 拿配置的，
+  不依赖共享目录，所以退回本地目录不影响连接。
+"""
+import os
+import sys
+
+P = "sing-box-for-apple/Library/Shared/FilePath.swift"
+
+OLD_DECL = "    private static let defaultSharedDirectory: URL! = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupName)"
+NEW_DECL = """    private static let defaultSharedDirectory: URL? = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupName)
+
+    /// App Group 不可用时的兜底目录（例如第三方签名未带 app group 权限）
+    private static let fallbackDirectory: URL = {
+        let fm = FileManager.default
+        let base = (try? fm.url(for: .applicationSupportDirectory, in: .userDomainMask,
+                                appropriateFor: nil, create: true)) ?? fm.temporaryDirectory
+        let dir = base.appendingPathComponent("YGShared", isDirectory: true)
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()"""
+
+PAIRS = [
+    (OLD_DECL, NEW_DECL),
+    ("        public static let sharedDirectory = defaultSharedDirectory!",
+     "        public static let sharedDirectory = defaultSharedDirectory ?? fallbackDirectory"),
+    ("        public static var sharedDirectory: URL! = defaultSharedDirectory",
+     "        public static var sharedDirectory: URL! = defaultSharedDirectory ?? fallbackDirectory"),
+]
+
+if not os.path.exists(P):
+    print("WARN: 找不到 " + P)
+    sys.exit(0)
+
+src = open(P, "r", encoding="utf-8").read()
+
+if "fallbackDirectory" in src:
+    print("已经打过补丁，跳过")
+    sys.exit(0)
+
+ok = 0
+for old, new in PAIRS:
+    if old in src:
+        src = src.replace(old, new, 1)
+        ok += 1
+        print("  ✓ 替换成功: " + old.strip()[:70])
+    else:
+        print("  ✗ 未匹配: " + old.strip()[:70])
+
+if ok == 0:
+    print("ERROR: 一处都没匹配上，FilePath.swift 可能改版了，终止以免打包出崩溃包")
+    sys.exit(1)
+
+open(P, "w", encoding="utf-8").write(src)
+print(f"FilePath 补丁完成，共 {ok} 处")
