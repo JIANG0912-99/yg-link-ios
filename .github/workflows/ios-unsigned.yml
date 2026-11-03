@@ -112,6 +112,16 @@ jobs:
           du -sh sing-box-for-apple/Libbox.xcframework
           ls -la sing-box-for-apple/Libbox.xcframework
 
+      - name: 兼容补丁（runner 的 Xcode 比上游要求的旧）
+        run: |
+          set -e
+          # nonisolated deinit 是 Swift 6.2 语法，Xcode 16 不认；deinit 本身在旧版就是 nonisolated
+          grep -rl "nonisolated deinit" sing-box-for-apple --include=*.swift 2>/dev/null | while read -r f; do
+            sed -i '' 's/^\([[:space:]]*\)nonisolated deinit {/\1deinit {/' "$f"
+            echo "fixed: $f"
+          done
+          echo "剩余 nonisolated deinit: $(grep -rl 'nonisolated deinit' sing-box-for-apple --include=*.swift 2>/dev/null | wc -l)"
+
       - name: 替换品牌
         env:
           APP_ID: ${{ github.event.inputs.app_id || 'com.yglink.app' }}
