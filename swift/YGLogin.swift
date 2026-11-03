@@ -156,7 +156,6 @@ enum YGLoginAPI {
 
 // MARK: - 登录流程状态
 
-@MainActor
 final class YGLoginViewModel: ObservableObject {
     @Published var username = ""
     @Published var password = ""
@@ -165,7 +164,8 @@ final class YGLoginViewModel: ObservableObject {
     @Published var done = false
     @Published var days: Int?
 
-    func submit() async {
+    /// 由 UI 调用（主线程）
+    func submit() {
         let u = username.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !u.isEmpty, !password.isEmpty else {
             errorText = "请填写账号和密码"
@@ -173,13 +173,21 @@ final class YGLoginViewModel: ObservableObject {
         }
         loading = true
         errorText = nil
-        defer { loading = false }
+        let p = password
+        Task {
+            let r = await YGLoginAPI.login(username: u, password: p)
+            await MainActor.run { self.apply(r, user: u) }
+        }
+    }
 
-        let r = await YGLoginAPI.login(username: u, password: password)
+    @MainActor
+    private func apply(_ r: YGLoginResult, user: String) {
+        loading = false
         switch r.code {
         case 0:
-            YGSession.shared.save(username: u, expire: r.expire ?? "", days: r.days ?? 0)
+            days = r.days
             done = true
+            YGSession.shared.save(username: user, expire: r.expire ?? "", days: r.days ?? 0)
         case 1:
             errorText = "账号或密码错误"
         case 4:
@@ -334,7 +342,7 @@ struct YGLoginView: View {
                     // 验证按钮
                     Button {
                         focus = nil
-                        Task { await vm.submit() }
+                        vm.submit()
                     } label: {
                         ZStack {
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
