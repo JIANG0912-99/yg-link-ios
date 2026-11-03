@@ -84,11 +84,21 @@ jobs:
           echo "内存："; sysctl hw.memsize 2>/dev/null || true
           echo "CPU："; sysctl -n hw.ncpu 2>/dev/null || true
           cd sing-box
-          # 默认会编 ios/iossimulator/tvos/tvossimulator/macos 五个平台，tvOS 会挂且拖慢一半时间
-          # 我们只要 iOS 真机（archive 走 generic/platform=iOS）
-          if ! go run ./cmd/internal/build_libbox -target apple -platform ios > ../libbox-build.log 2>&1; then
-            echo "=== libbox 构建失败，最后 150 行 ==="
-            tail -150 ../libbox-build.log
+          # 上游给 gomobile 传了 -v，包名刷屏会把真正的报错挤掉，先删掉这一行
+          if [ -f cmd/internal/build_libbox/main.go ]; then
+            sed -i '' '/^[[:space:]]*"-v",$/d' cmd/internal/build_libbox/main.go || true
+            echo "已去除 -v："; grep -c '"-v"' cmd/internal/build_libbox/main.go || true
+          fi
+          set +e
+          go run ./cmd/internal/build_libbox -target apple -platform ios > ../libbox-build.log 2>&1
+          RC=$?
+          set -e
+          echo "go build 退出码 = $RC"
+          echo "=== 磁盘 ==="; df -h / | tail -2
+          echo "=== 内存 ==="; vm_stat | head -8
+          if [ $RC -ne 0 ]; then
+            echo "=== 完整日志最后 100 行 ==="
+            tail -100 ../libbox-build.log
             exit 1
           fi
           tail -5 ../libbox-build.log
