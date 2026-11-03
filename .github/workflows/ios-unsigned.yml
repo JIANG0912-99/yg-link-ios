@@ -121,6 +121,7 @@ jobs:
             echo "fixed: $f"
           done
           echo "剩余 nonisolated deinit: $(grep -rl 'nonisolated deinit' sing-box-for-apple --include=*.swift 2>/dev/null | wc -l)"
+          python3 scripts/patch_swift.py sing-box-for-apple
 
       - name: 替换品牌
         env:
