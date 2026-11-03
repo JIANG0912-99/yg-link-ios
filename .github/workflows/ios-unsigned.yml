@@ -51,7 +51,7 @@ jobs:
       - name: 安装 Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.25"
           cache: false
 
       - name: 安装 gomobile / gobind（上游 FindMobile 只认 GOPATH/bin/gobind）
