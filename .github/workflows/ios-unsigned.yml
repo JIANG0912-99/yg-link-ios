@@ -165,11 +165,17 @@ jobs:
           grep -q "ARCHIVE SUCCEEDED" ../xcodebuild.log
 
       - name: 打包成 IPA
+        env:
+          APP_NAME: ${{ github.event.inputs.app_name || 'YG Link' }}
         run: |
           set -e
           APP="$(find sing-box-for-apple/build/SFI.xcarchive/Products/Applications -maxdepth 1 -name '*.app' | head -1)"
           echo "产物: $APP"
           rm -rf out && mkdir -p out/Payload
+          # 显示名兜底：GENERATE_INFOPLIST_FILE 下 INFOPLIST_KEY_ 不一定生效，打包前直接写死
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName ${APP_NAME}" "$APP/Info.plist" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string ${APP_NAME}" "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" "$APP/Info.plist"
           cp -R "$APP" out/Payload/
           cd out
           zip -qry "YGLink-unsigned.ipa" Payload
