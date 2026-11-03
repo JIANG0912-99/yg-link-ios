@@ -176,6 +176,12 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName ${APP_NAME}" "$APP/Info.plist" 2>/dev/null \
             || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string ${APP_NAME}" "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c "Print :CFBundleDisplayName" "$APP/Info.plist"
+          # ATS 放行（IP 直连 + 自签证书，需要它不拦）
+          /usr/libexec/PlistBuddy -c "Delete :NSAppTransportSecurity" "$APP/Info.plist" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true" "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c "Print :NSAppTransportSecurity" "$APP/Info.plist"
           cp -R "$APP" out/Payload/
           cd out
           zip -qry "YGLink-unsigned.ipa" Payload
