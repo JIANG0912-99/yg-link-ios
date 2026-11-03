@@ -58,7 +58,11 @@ def process(path):
     orig = src
 
     src, n1 = replace_call(src, "glassEffect", "background(Color.secondary.opacity(0.08))", True)
-    src = src.replace("tabViewBottomAccessory {", "Group {")
+    # 先处理链式调用 .tabViewBottomAccessory { ... } -> .overlay(alignment: .bottom) { ... }
+    import re as _re
+    src = _re.sub(r"\.tabViewBottomAccessory\s*\{", ".overlay(alignment: .bottom) {", src)
+    # 再处理裸用法（前面没有点）
+    src = _re.sub(r"(?<![\w.])tabViewBottomAccessory\s*\{", "Group {", src)
     n2 = orig.count("tabViewBottomAccessory {")
 
     if src != orig:
