@@ -127,7 +127,9 @@ jobs:
         env:
           APP_ID: ${{ github.event.inputs.app_id || 'com.yglink.app' }}
           APP_NAME: ${{ github.event.inputs.app_name || 'YG Link' }}
-        run: bash scripts/rebrand.sh sing-box-for-apple "$APP_ID" "$APP_NAME"
+        run: |
+          bash scripts/rebrand.sh sing-box-for-apple "$APP_ID" "$APP_NAME"
+          python3 scripts/patch_brand.py "$APP_ID"
 
       - name: 注入登录门（A 方案）
         run: |
@@ -153,6 +155,7 @@ jobs:
             -skipPackagePluginValidation \
             -skipMacroValidation \
             BASE_PACKAGE_IDENTIFIER="$APP_ID" \
+            INFOPLIST_KEY_CFBundleDisplayName="$APP_NAME" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
