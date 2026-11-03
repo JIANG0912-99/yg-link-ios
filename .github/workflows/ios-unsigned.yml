@@ -76,14 +76,19 @@ jobs:
           echo "客户端提交: $(git -C sing-box-for-apple rev-parse --short HEAD)"
 
       - name: 构建 Libbox.xcframework
+        env:
+          GOFLAGS: "-p=1"
+          GOMAXPROCS: "2"
         run: |
           set -e
+          echo "内存："; sysctl hw.memsize 2>/dev/null || true
+          echo "CPU："; sysctl -n hw.ncpu 2>/dev/null || true
           cd sing-box
           # 默认会编 ios/iossimulator/tvos/tvossimulator/macos 五个平台，tvOS 会挂且拖慢一半时间
           # 我们只要 iOS 真机（archive 走 generic/platform=iOS）
           if ! go run ./cmd/internal/build_libbox -target apple -platform ios > ../libbox-build.log 2>&1; then
-            echo "=== libbox 构建失败，最后 120 行 ==="
-            tail -120 ../libbox-build.log
+            echo "=== libbox 构建失败，最后 150 行 ==="
+            tail -150 ../libbox-build.log
             exit 1
           fi
           tail -5 ../libbox-build.log
