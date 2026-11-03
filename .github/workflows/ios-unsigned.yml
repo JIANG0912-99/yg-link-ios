@@ -79,7 +79,14 @@ jobs:
         run: |
           set -e
           cd sing-box
-          go run ./cmd/internal/build_libbox -target apple 2>&1 | tail -40
+          # 默认会编 ios/iossimulator/tvos/tvossimulator/macos 五个平台，tvOS 会挂且拖慢一半时间
+          # 我们只要 iOS 真机（archive 走 generic/platform=iOS）
+          if ! go run ./cmd/internal/build_libbox -target apple -platform ios > ../libbox-build.log 2>&1; then
+            echo "=== libbox 构建失败，最后 120 行 ==="
+            tail -120 ../libbox-build.log
+            exit 1
+          fi
+          tail -5 ../libbox-build.log
           cd ..
           if [ ! -d sing-box-for-apple/Libbox.xcframework ]; then
             echo "上游未自动拷贝，手动补齐"
