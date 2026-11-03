@@ -24,7 +24,7 @@ NEW_DECL = """    private static let defaultSharedDirectory: URL? = FileManager.
         let fm = FileManager.default
         let base = (try? fm.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                 appropriateFor: nil, create: true)) ?? fm.temporaryDirectory
-        let dir = base.appendingPathComponent("YGShared", isDirectory: true)
+        let dir = base.appendingPathComponent("YGLINK_FALLBACK_DIR", isDirectory: true)
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()"""
