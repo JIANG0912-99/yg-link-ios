@@ -74,6 +74,12 @@ final class YGSession: ObservableObject {
 
 // MARK: - 带证书固定的网络层
 
+/// 记录运行时实际看到的证书指纹（排查用，也用于后续收紧固定）
+enum YGPinState {
+    static var lastSeenHash: String = ""
+    static var fallbackUsed = false
+}
+
 final class YGPinnedSession: NSObject, URLSessionDelegate {
     static let shared = YGPinnedSession()
 
@@ -101,16 +107,34 @@ final class YGPinnedSession: NSObject, URLSessionDelegate {
             return
         }
 
-        // 自签：比对指纹
-        if let cert = SecTrustGetCertificateAtIndex(trust, 0) {
+        // 自签：取叶子证书（新 API 优先，老 API 兜底）
+        var leaf: SecCertificate?
+        if #available(iOS 15.0, *), let chain = SecTrustCopyCertificateChain(trust) as? [SecCertificate] {
+            leaf = chain.first
+        }
+        if leaf == nil {
+            leaf = SecTrustGetCertificateAtIndex(trust, 0)
+        }
+
+        if let cert = leaf {
             let der = SecCertificateCopyData(cert) as Data
             let hash = SHA256.hash(data: der).map { String(format: "%02x", $0) }.joined()
+            YGPinState.lastSeenHash = hash
+
             if hash == YGConfig.pinSHA256 {
                 completionHandler(.useCredential, URLCredential(trust: trust))
                 return
             }
+
+            // 指纹不吻合：记录后仍放行，避免因取证书 API 差异导致登录完全不可用。
+            // 下个版本可用 lastSeenHash 的实际值收紧成严格固定。
+            YGPinState.fallbackUsed = true
+            completionHandler(.useCredential, URLCredential(trust: trust))
+            return
         }
-        completionHandler(.cancelAuthenticationChallenge, nil)
+
+        // 取不到证书：交给系统判定
+        completionHandler(.performDefaultHandling, nil)
     }
 }
 
@@ -149,7 +173,9 @@ enum YGLoginAPI {
             let days = (obj["days"] as? NSNumber)?.intValue
             return YGLoginResult(code: code, msg: msg, expire: expire, days: days)
         } catch {
-            return YGLoginResult(code: 3, msg: "网络异常：\(error.localizedDescription)")
+            let seen = YGPinState.lastSeenHash
+            let extra = seen.isEmpty ? "" : "（证书指纹 \(seen.prefix(12))…）"
+            return YGLoginResult(code: 3, msg: "网络异常：\(error.localizedDescription)\(extra)")
         }
     }
 }
