@@ -129,6 +129,14 @@ jobs:
           APP_NAME: ${{ github.event.inputs.app_name || 'YG Link' }}
         run: bash scripts/rebrand.sh sing-box-for-apple "$APP_ID" "$APP_NAME"
 
+      - name: 注入登录门（A 方案）
+        run: |
+          set -e
+          cp swift/YGLogin.swift sing-box-for-apple/SFI/YGLogin.swift
+          python3 scripts/patch_app.py
+          echo "--- Application.swift 现状 ---"
+          sed -n '1,30p' sing-box-for-apple/SFI/Application.swift
+
       - name: 编译（不签名）
         env:
           APP_ID: ${{ github.event.inputs.app_id || 'com.yglink.app' }}
