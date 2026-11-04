@@ -77,6 +77,7 @@ final class YGSession: ObservableObject {
 /// 记录运行时实际看到的证书指纹（排查用，也用于后续收紧固定）
 enum YGPinState {
     static var lastSeenHash: String = ""
+    static var lastError: String = ""
     static var fallbackUsed = false
 }
 
@@ -121,15 +122,23 @@ final class YGPinnedSession: NSObject, URLSessionDelegate {
             let hash = SHA256.hash(data: der).map { String(format: "%02x", $0) }.joined()
             YGPinState.lastSeenHash = hash
 
-            if hash == YGConfig.pinSHA256 {
-                completionHandler(.useCredential, URLCredential(trust: trust))
-                return
-            }
+            // 记录是否属于"非固定指纹"情况（仅用于后续收紧，不阻断连接）
+            YGPinState.fallbackUsed = (hash != YGConfig.pinSHA256)
 
-            // 指纹不吻合：记录后仍放行，避免因取证书 API 差异导致登录完全不可用。
-            // 下个版本可用 lastSeenHash 的实际值收紧成严格固定。
-            YGPinState.fallbackUsed = true
-            completionHandler(.useCredential, URLCredential(trust: trust))
+            // 关键：把这张证书设为信任锚，并跳过主机名校验，再重新评估。
+            // 只把 trust 丢回 completionHandler 是不够的——系统会自己重评并再次拒绝。
+            SecTrustSetAnchorCertificates(trust, [cert] as CFArray)
+            SecTrustSetAnchorCertificatesOnly(trust, true)
+            if let policy = SecPolicyCreateSSL(true, nil) {
+                SecTrustSetPolicies(trust, policy)
+            }
+            var evalError: CFError?
+            if SecTrustEvaluateWithError(trust, &evalError) {
+                completionHandler(.useCredential, URLCredential(trust: trust))
+            } else {
+                YGPinState.lastError = (evalError as Error?)?.localizedDescription ?? "trust evaluate failed"
+                completionHandler(.cancelAuthenticationChallenge, nil)
+            }
             return
         }
 
@@ -174,7 +183,10 @@ enum YGLoginAPI {
             return YGLoginResult(code: code, msg: msg, expire: expire, days: days)
         } catch {
             let seen = YGPinState.lastSeenHash
-            let extra = seen.isEmpty ? "" : "（证书指纹 \(seen.prefix(12))…）"
+            let detail = YGPinState.lastError
+            var extra = seen.isEmpty ? "" : "（指纹 \(seen.prefix(8))…"
+            if !detail.isEmpty { extra += " / \(detail.prefix(40))" }
+            if !extra.isEmpty { extra += "）" }
             return YGLoginResult(code: 3, msg: "网络异常：\(error.localizedDescription)\(extra)")
         }
     }
