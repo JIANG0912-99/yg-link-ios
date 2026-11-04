@@ -26,6 +26,88 @@ enum YGConfig {
     static let proxyPort = 3716
 }
 
+
+// MARK: - SOCKS5 认证（不走 TLS，直接问 CCProxy）
+
+/// 用账号密码对 3716 端口做一次 SOCKS5 握手。
+/// CCProxy 认了 = 密码正确；拒了 = 密码错或账号停用。
+/// 完全绕开 HTTPS 证书问题，而且校验的正是"这个账号能不能用代理"。
+enum YGSocks {
+    /// 0 = 通过，1 = 拒绝，-1 = 网络/协议错误
+    static func auth(host: String, port: UInt16, user: String, pass: String, timeoutMs: Int32 = 8000) -> Int {
+        var hints = addrinfo()
+        hints.ai_family = AF_INET
+        hints.ai_socktype = SOCK_STREAM
+        var res: UnsafeMutablePointer<addrinfo>?
+        guard getaddrinfo(host, String(port), &hints, &res) == 0, let info = res else { return -1 }
+        defer { freeaddrinfo(res) }
+
+        let fd = socket(info.pointee.ai_family, info.pointee.ai_socktype, info.pointee.ai_protocol)
+        guard fd >= 0 else { return -1 }
+        defer { close(fd) }
+
+        let oldFlags = fcntl(fd, F_GETFL, 0)
+        _ = fcntl(fd, F_SETFL, oldFlags | O_NONBLOCK)
+
+        let rc = connect(fd, info.pointee.ai_addr, info.pointee.ai_addrlen)
+        if rc != 0 {
+            if errno != EINPROGRESS { return -1 }
+            var pfd = pollfd(fd: fd, events: Int16(POLLOUT), revents: 0)
+            let pr = poll(&pfd, 1, timeoutMs)
+            guard pr > 0 else { return -1 }
+            var soErr: Int32 = 0
+            var soLen = socklen_t(MemoryLayout<Int32>.size)
+            getsockopt(fd, SOL_SOCKET, SO_ERROR, &soErr, &soLen)
+            if soErr != 0 { return -1 }
+        }
+        _ = fcntl(fd, F_SETFL, oldFlags)
+
+        var tv = timeval(tv_sec: Int(timeoutMs / 1000), tv_usec: 0)
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+        setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+
+        func sendAll(_ bytes: [UInt8]) -> Bool {
+            var sent = 0
+            while sent < bytes.count {
+                let n = bytes.withUnsafeBytes { buf -> Int in
+                    write(fd, buf.baseAddress! + sent, bytes.count - sent)
+                }
+                if n <= 0 { return false }
+                sent += n
+            }
+            return true
+        }
+
+        func recvN(_ n: Int) -> [UInt8]? {
+            var out = [UInt8]()
+            var buf = [UInt8](repeating: 0, count: n)
+            while out.count < n {
+                let got = buf.withUnsafeMutableBytes { p -> Int in
+                    read(fd, p.baseAddress, n - out.count)
+                }
+                if got <= 0 { return nil }
+                out.append(contentsOf: buf[0..<got])
+            }
+            return out
+        }
+
+        guard sendAll([0x05, 0x01, 0x02]) else { return -1 }
+        guard let m = recvN(2), m[0] == 0x05 else { return -1 }
+        guard m[1] == 0x02 else { return -1 }
+
+        let ub = Array(user.utf8)
+        let pb = Array(pass.utf8)
+        guard ub.count <= 255, pb.count <= 255 else { return 1 }
+        var msg: [UInt8] = [0x01, UInt8(ub.count)]
+        msg.append(contentsOf: ub)
+        msg.append(UInt8(pb.count))
+        msg.append(contentsOf: pb)
+        guard sendAll(msg) else { return -1 }
+        guard let a = recvN(2) else { return -1 }
+        return a[1] == 0x00 ? 0 : 1
+    }
+}
+
 // MARK: - 会话状态
 
 final class YGSession: ObservableObject {
@@ -214,9 +296,24 @@ final class YGLoginViewModel: ObservableObject {
         loading = true
         errorText = nil
         let p = password
-        Task {
-            let r = await YGLoginAPI.login(username: u, password: p)
-            await MainActor.run { self.apply(r, user: u) }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let r = YGSocks.auth(host: YGConfig.proxyHost,
+                                 port: UInt16(YGConfig.proxyPort),
+                                 user: u,
+                                 pass: p)
+            DispatchQueue.main.async {
+                self.loading = false
+                switch r {
+                case 0:
+                    self.done = true
+                    YGSession.shared.save(username: u, expire: "", days: 0)
+                case 1:
+                    self.errorText = "账号或密码错误，或账号已停用"
+                default:
+                    self.errorText = "无法连接代理服务器 " + YGConfig.proxyHost + ":" + String(YGConfig.proxyPort) + "，请检查网络"
+                }
+            }
         }
     }
 
