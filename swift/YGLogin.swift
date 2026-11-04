@@ -129,9 +129,8 @@ final class YGPinnedSession: NSObject, URLSessionDelegate {
             // 只把 trust 丢回 completionHandler 是不够的——系统会自己重评并再次拒绝。
             SecTrustSetAnchorCertificates(trust, [cert] as CFArray)
             SecTrustSetAnchorCertificatesOnly(trust, true)
-            if let policy = SecPolicyCreateSSL(true, nil) {
-                SecTrustSetPolicies(trust, policy)
-            }
+            let sslPolicy = SecPolicyCreateSSL(true, nil)
+            SecTrustSetPolicies(trust, sslPolicy)
             var evalError: CFError?
             if SecTrustEvaluateWithError(trust, &evalError) {
                 completionHandler(.useCredential, URLCredential(trust: trust))
