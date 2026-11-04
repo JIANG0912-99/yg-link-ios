@@ -19,12 +19,12 @@ P = "sing-box-for-apple/Library/Shared/FilePath.swift"
 OLD_DECL = "    private static let defaultSharedDirectory: URL! = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupName)"
 NEW_DECL = """    private static let defaultSharedDirectory: URL? = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupName)
 
-    /// App Group 不可用时的兜底目录（例如第三方签名未带 app group 权限）
+    /// App Group 不可用时的兜底目录。
+    /// 必须极短：Unix domain socket 的 sun_path 上限约 104 字节，
+    /// 扩展容器的路径本身已有 80 字符，再拼长目录名会让 bind() 报 invalid argument。
     private static let fallbackDirectory: URL = {
         let fm = FileManager.default
-        let base = (try? fm.url(for: .applicationSupportDirectory, in: .userDomainMask,
-                                appropriateFor: nil, create: true)) ?? fm.temporaryDirectory
-        let dir = base.appendingPathComponent("YGLINK_FALLBACK_DIR", isDirectory: true)
+        let dir = fm.temporaryDirectory.appendingPathComponent("y", isDirectory: true)
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()"""
