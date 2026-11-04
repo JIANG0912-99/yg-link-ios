@@ -20,11 +20,13 @@ OLD_DECL = "    private static let defaultSharedDirectory: URL! = FileManager.de
 NEW_DECL = """    private static let defaultSharedDirectory: URL? = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupName)
 
     /// App Group 不可用时的兜底目录。
-    /// 必须极短：Unix domain socket 的 sun_path 上限约 104 字节，
-    /// 扩展容器的路径本身已有 80 字符，再拼长目录名会让 bind() 报 invalid argument。
+    /// 必须极短：Unix domain socket 的 sun_path 上限 104 字节。
+    /// 注意不能用 FileManager.temporaryDirectory —— 它返回 /private/var/...，
+    /// 比 /var/... 多 8 个字符，会让路径刚好超限。
     private static let fallbackDirectory: URL = {
         let fm = FileManager.default
-        let dir = fm.temporaryDirectory.appendingPathComponent("y", isDirectory: true)
+        let home = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+        let dir = home.appendingPathComponent("y", isDirectory: true)
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()"""
