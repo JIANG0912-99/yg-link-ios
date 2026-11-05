@@ -131,6 +131,7 @@ jobs:
           python3 scripts/patch_swift.py sing-box-for-apple
           python3 scripts/patch_fs.py
           python3 scripts/patch_appconfig.py
+          python3 scripts/patch_db.py
 
       - name: 替换品牌
         env:
