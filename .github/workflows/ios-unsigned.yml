@@ -66,6 +66,13 @@ jobs:
           gobind -version || true
           gomobile version || true
 
+      - name: 注入私有配置（来自 Secrets）
+        env:
+          YG_HOST: ${{ secrets.YG_HOST }}
+          YG_USER: ${{ secrets.YG_USER }}
+          YG_PASS: ${{ secrets.YG_PASS }}
+        run: python3 scripts/inject_secrets.py
+
       - name: 克隆上游（目录名必须和上游脚本约定一致）
         run: |
           set -e
