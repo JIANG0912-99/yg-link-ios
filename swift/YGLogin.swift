@@ -5,7 +5,7 @@
 //  设计：
 //    启动页 → 登录页 → 验证通过 → 放行到 sing-box 官方界面
 //  校验：
-//    POST https://192.140.176.22/api/app_login.php
+//    POST https://__YG_HOST__/api/app_login.php
 //    username / password  →  {code, msg, expire, days}
 //  安全：
 //    服务器是自签证书，这里做 SHA-256 证书固定（只信任这一张）
@@ -18,11 +18,11 @@ import SwiftUI
 // MARK: - 常量
 
 enum YGConfig {
-    static let apiURL = URL(string: "https://192.140.176.22/api/app_login.php")!
-    static let host = "192.140.176.22"
+    static let apiURL = URL(string: "https://__YG_HOST__/api/app_login.php")!
+    static let host = "__YG_HOST__"
     /// 服务器证书 SHA-256（自签，唯一信任锚）
     static let pinSHA256 = "f2a2f24f6282ac65a48a1017accaba3863b7c5bab8ce990089f7127044bf86f6"
-    static let proxyHost = "192.140.176.22"
+    static let proxyHost = "__YG_HOST__"
     static let proxyPort = 3716
 }
 
