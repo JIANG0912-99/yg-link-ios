@@ -1,25 +1,17 @@
-#!/usr/bin/env python3
-"""
-Database 补丁：启动时 settings.db 迁移失败会导致 fatalError 闪退。
-改成"迁移失败就删除旧库重来一次"，鲁棒处理损坏/不兼容的旧库。
-"""
 import os
 import sys
 
 P = "sing-box-for-apple/Library/Database/Database.swift"
-
 if not os.path.exists(P):
     print("WARN: 找不到 " + P)
     sys.exit(0)
 
 src = open(P, "r", encoding="utf-8").read()
-
-if "openDatabase(at:" in src:
+if "YG_FALLBACK_DOCS" in src:
     print("已经打过补丁，跳过")
     sys.exit(0)
 
 start = src.index("private static func makeShared() -> any DatabaseWriter {")
-# 从函数体开始做花括号配平，找到该函数的结束花括号
 body_start = src.index("{", start) + 1
 depth = 1
 i = body_start
@@ -29,26 +21,48 @@ while depth > 0 and i < len(src):
     elif src[i] == "}":
         depth -= 1
     i += 1
-end = i  # makeShared 函数结束后的位置
+end = i
 
 NEW = '''private static func makeShared() -> any DatabaseWriter {
         let dbURL = FilePath.sharedDirectory.appendingPathComponent("settings.db")
         do {
             return try openDatabase(at: dbURL)
         } catch {
-            // 旧库损坏/不兼容：删除后重来一次，避免启动闪退
+            NSLog("YGLink DB: first open failed: %@", error.localizedDescription)
+            // 旧库损坏：删除重试
             try? FileManager.default.removeItem(at: dbURL)
             do {
                 return try openDatabase(at: dbURL)
             } catch {
-                fatalError(error.localizedDescription)
+                NSLog("YGLink DB: retry failed: %@", error.localizedDescription)
+                // 换 Documents 目录再试（更可写，且能持久化）
+                let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+                let alt = docs.appendingPathComponent("settings.db")
+                do {
+                    return try openDatabase(at: alt)
+                } catch {
+                    // 最后兜底：内存库，保证 App 不闪退（配置当次会话有效）
+                    NSLog("YGLink DB: using in-memory after all failed: %@", error.localizedDescription)
+                    do {
+                        let db = try DatabaseQueue()
+                        try migrate(db)
+                        return db
+                    } catch {
+                        fatalError(error.localizedDescription)
+                    }
+                }
             }
         }
     }
 
     private static func openDatabase(at url: URL) throws -> any DatabaseWriter {
-        try FileManager.default.createDirectory(at: FilePath.sharedDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let database = try DatabasePool(path: url.relativePath)
+        try migrate(database)
+        return database
+    }
+
+    private static func migrate(_ database: any DatabaseWriter) throws {
         var migrator = DatabaseMigrator().disablingDeferredForeignKeyChecks()
         migrator.registerMigration("initialize") { db in
             try db.create(table: "profiles") { t in
@@ -75,11 +89,9 @@ NEW = '''private static func makeShared() -> any DatabaseWriter {
             try db.execute(sql: "UPDATE preferences SET name = 'exclude_cellular_services' WHERE name = 'exclude_celluar_services'")
         }
         try migrator.migrate(database)
-        return database
     }'''
 
 src = src[:start] + NEW + src[end:]
 open(P, "w", encoding="utf-8").write(src)
-print("Database 补丁完成：迁移失败自动删库重试")
-print("openDatabase 出现次数:", src.count("openDatabase(at:"))
-print("fatalError 出现次数:", src.count("fatalError"))
+print("Database 补丁完成：四级兜底（正常/删库/Documents/内存）")
+print("花括号:", src.count("{"), src.count("}"))
