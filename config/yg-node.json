@@ -3,11 +3,11 @@
     {
       "type": "socks",
       "tag": "yg-node",
-      "server": "192.140.176.22",
+      "server": "__YG_HOST__",
       "server_port": 3716,
       "version": "5",
-      "username": "xjy2003",
-      "password": "xjy2003"
+      "username": "__YG_USER__",
+      "password": "__YG_USER__"
     },
     {
       "type": "direct",
