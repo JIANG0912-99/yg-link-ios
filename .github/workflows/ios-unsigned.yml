@@ -24,10 +24,6 @@ env:
   SB_REPO: https://github.com/SagerNet/sing-box.git
   APP_REPO: https://github.com/SagerNet/sing-box-for-apple.git
 
-concurrency:
-  group: ios-build
-  cancel-in-progress: true
-
 jobs:
   build:
     runs-on: macos-14
