@@ -20,14 +20,20 @@ OLD_DECL = "    private static let defaultSharedDirectory: URL! = FileManager.de
 NEW_DECL = """    private static let defaultSharedDirectory: URL? = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupName)
 
     /// App Group 不可用时的兜底目录。
-    /// 必须极短：Unix domain socket 的 sun_path 上限 104 字节。
-    /// 注意不能用 FileManager.temporaryDirectory —— 它返回 /private/var/...，
-    /// 比 /var/... 多 8 个字符，会让路径刚好超限。
+    /// 要求：① 一定可写  ② 路径足够短（unix socket 的 sun_path 上限 104 字节）
+    /// 做法：从 Documents 反推容器根目录 —— Documents 由系统保证存在且可写，
+    ///       比 NSHomeDirectory() 可靠（后者在重签 App 里可能返回只读的包目录）。
     private static let fallbackDirectory: URL = {
         let fm = FileManager.default
-        let home = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-        let dir = home.appendingPathComponent("y", isDirectory: true)
-        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? fm.temporaryDirectory
+        let container = docs.deletingLastPathComponent()
+        let dir = container.appendingPathComponent("y", isDirectory: true)
+        do {
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        } catch {
+            NSLog("YGLink FilePath: create fallback dir failed: %@", error.localizedDescription)
+        }
         return dir
     }()"""
 
