@@ -128,6 +128,7 @@ jobs:
           python3 scripts/patch_fs.py
           python3 scripts/patch_appconfig.py
           python3 scripts/patch_db.py
+          python3 scripts/patch_tcp.py
 
       - name: 替换品牌
         env:
