@@ -13,6 +13,7 @@
 
 import CryptoKit
 import Foundation
+import Library
 import SwiftUI
 
 // MARK: - 常量
@@ -352,6 +353,7 @@ public struct YGGate<Content: View>: View {
         Group {
             if session.loggedIn {
                 content
+                    .task { YGDefaultProfile.ensure() }
             } else {
                 YGLoginFlow()
             }
@@ -579,3 +581,37 @@ struct YGLoginView: View {
         )
     }
 }
+
+// MARK: - 自动创建默认配置（首次登录后）
+
+enum YGDefaultProfile {
+    static let profileName = "yg-node"
+
+    /// 内置默认规则（由小卷毛 .conf 转换而来；占位符在构建时由 Secrets 注入）
+    static let configContent = """
+{"outbounds":[{"type":"socks","tag":"yg-node","server":"__YG_HOST__","server_port":3716,"version":"5","username":"__YG_USER__","password":"__YG_PASS__"},{"type":"direct","tag":"direct"},{"type":"block","tag":"block"}],"route":{"rules":[{"domain":["down.anticheatexpert.com"],"outbound":"block"},{"domain":["m.baidu.com"],"outbound":"yg-node"},{"domain":["m.jd.com"],"outbound":"yg-node"},{"domain":["www.baidu.com"],"outbound":"yg-node"},{"domain":["new.818fka.com"],"outbound":"yg-node"},{"domain":["sougou.com"],"outbound":"yg-node"},{"domain":["www.mzeie.cn"],"outbound":"yg-node"},{"ip_cidr":["106.63.103.8/32"],"outbound":"yg-node"},{"domain":["nj.cschannel.anticheatexpert.com"],"outbound":"yg-node"},{"domain_keyword":["lua"],"outbound":"direct"},{"domain_keyword":["youesp"],"outbound":"direct"},{"domain_keyword":["lknb666"],"outbound":"direct"},{"domain_keyword":["nb08"],"outbound":"direct"},{"domain_keyword":["luoyew"],"outbound":"direct"},{"domain_keyword":["dy.3i.hk"],"outbound":"yg-node"},{"domain":["down.qq.com"],"outbound":"direct"},{"ip_cidr":["101.226.101.163/32"],"outbound":"direct"},{"domain_keyword":["superbed"],"outbound":"direct"},{"domain_keyword":["imgdb"],"outbound":"direct"},{"domain_keyword":["image"],"outbound":"direct"},{"domain_keyword":["t3"],"outbound":"direct"},{"domain_keyword":["t3data"],"outbound":"direct"},{"domain_keyword":["840fk"],"outbound":"direct"},{"domain_keyword":["open"],"outbound":"direct"},{"domain_keyword":["xui"],"outbound":"direct"},{"domain_keyword":["aegis"],"outbound":"direct"},{"domain_keyword":["imgcache"],"outbound":"direct"},{"domain_keyword":["qlogo"],"outbound":"yg-node"},{"domain_keyword":["jiazhang"],"outbound":"direct"},{"domain_keyword":["ssl.msdk"],"outbound":"direct"},{"port":[10012],"outbound":"yg-node"},{"ip_cidr":["120.204.207.84/32"],"outbound":"direct"},{"ip_cidr":["101.226.94.67/32"],"outbound":"direct"},{"ip_cidr":["101.226.96.203/32"],"outbound":"direct"},{"ip_cidr":["116.128.169.94/32"],"outbound":"direct"},{"ip_cidr":["58.246.163.95/32"],"outbound":"direct"},{"ip_cidr":["221.181.98.213/32"],"outbound":"direct"},{"ip_cidr":["43.154.254.219/32"],"outbound":"direct"},{"ip_cidr":["43.154.254.250/32"],"outbound":"direct"},{"ip_cidr":["49.51.67.47/32"],"outbound":"direct"},{"ip_cidr":["182.254.116.117/32"],"outbound":"direct"},{"ip_cidr":["182.254.116.119/32"],"outbound":"direct"},{"ip_cidr":["183.192.196.121/32"],"outbound":"direct"},{"ip_cidr":["116.128.169.68/32"],"outbound":"direct"},{"port":[443],"outbound":"block"},{"port":[80],"outbound":"block"}],"final":"direct"},"dns":{"servers":[{"type":"udp","tag":"dns-1","server":"114.114.114.114","detour":"direct"}]}}
+"""
+
+    /// 若“yg-node”配置不存在则自动创建（幂等，可重复调用）
+    static func ensure() {
+        Task.detached(priority: .utility) {
+            do {
+                let existing = try await ProfileManager.list()
+                if existing.contains(where: { $0.name == profileName }) { return }
+                let nextID = try await ProfileManager.nextID()
+                let dir = FilePath.sharedDirectory.appendingPathComponent("configs", isDirectory: true)
+                let file = dir.appendingPathComponent("config_\(nextID).json")
+                try await BlockingIO.run {
+                    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                    try configContent.write(to: file, atomically: true, encoding: .utf8)
+                }
+                let profile = Profile(name: profileName, type: .local, path: file.relativePath)
+                try await ProfileManager.create(profile)
+                NSLog("YGLink: default profile created")
+            } catch {
+                NSLog("YGLink: default profile create failed: %@", error.localizedDescription)
+            }
+        }
+    }
+}
+
